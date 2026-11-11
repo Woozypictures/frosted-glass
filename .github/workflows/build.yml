@@ -1,0 +1,59 @@
+name: build
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  pack:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build, align and sign
+        env:
+          KS_B64: ${{ secrets.ICONPACK_KEYSTORE_B64 }}
+          KS_PASS: ${{ secrets.ICONPACK_KEYSTORE_PASS }}
+          KS_ALIAS: ${{ secrets.ICONPACK_KEY_ALIAS }}
+        run: |
+          set -ex -o pipefail
+          EXPECTED=b46b0e06b37c0368cced5615f461f0508c96c0f392dca303c60cb6ee0ca6abe8
+          VCODE=$((100 + ${{ github.run_number }}))
+          VNAME=2.3.${{ github.run_number }}
+          sed -i "s/android:versionCode=\"[0-9]*\"/android:versionCode=\"$VCODE\"/; s/android:versionName=\"[^\"]*\"/android:versionName=\"$VNAME\"/" proj/AndroidManifest.xml
+          BT=$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)
+          JAR=$(ls -d "$ANDROID_HOME"/platforms/android-* | sort -V | tail -1)/android.jar
+          cd proj && mkdir -p obj gen
+          "$BT/aapt" package -f -m -J gen -M AndroidManifest.xml -S res -A assets -I "$JAR" -F ../unsigned.apk
+          javac -source 8 -target 8 -bootclasspath "$JAR" -d obj -sourcepath src:gen src/com/woozypictures/frostedglass/MainActivity.java 2>&1 | grep -v warning || true
+          "$BT/d8" --min-api 21 --output . $(find obj -name '*.class') --lib "$JAR"
+          "$BT/aapt" add ../unsigned.apk classes.dex
+          cd ..
+          "$BT/zipalign" -f -p 4 unsigned.apk aligned.apk
+          echo "$KS_B64" | base64 -d > "$RUNNER_TEMP/ks.jks"
+          "$BT/apksigner" sign --ks "$RUNNER_TEMP/ks.jks" --ks-key-alias "$KS_ALIAS" --ks-pass env:KS_PASS --key-pass env:KS_PASS --out Frosted_Glass_Icon_Pack.apk aligned.apk
+          "$BT/apksigner" verify --print-certs Frosted_Glass_Icon_Pack.apk | tee cert.txt
+          grep -q "$EXPECTED" cert.txt
+          "$BT/aapt" dump badging Frosted_Glass_Icon_Pack.apk | head -2
+          rm -f "$RUNNER_TEMP/ks.jks"
+          echo "VNAME=$VNAME" >> "$GITHUB_ENV"
+      - name: Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ env.VNAME }}
+          name: Frosted Glass Icon Pack ${{ env.VNAME }}
+          files: Frosted_Glass_Icon_Pack.apk
+      - name: Status
+        if: always()
+        run: |
+          mkdir -p /tmp/o
+          echo "${{ job.status }} $GITHUB_SHA" > /tmp/o/status.txt
+          git config user.name build-bot
+          git config user.email build-bot@users.noreply.github.com
+          git checkout --orphan build-log
+          git rm -rf -q . || true
+          cp /tmp/o/status.txt .
+          git add status.txt
+          git commit -q -m "build ${{ github.run_number }}"
+          git push -f origin build-log
