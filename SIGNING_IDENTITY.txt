@@ -1,0 +1,14 @@
+Woozypictures release signing identity — NEW KEY
+
+Application ID: com.woozypictures.frostedglass
+Owner / certificate common name: Mahesh Sharma
+Developer / organisational unit: Woozypictures
+Keystore filename supplied separately: Woozypictures_Release_Keystore_New.jks
+Key alias: woozypictures-release
+Certificate type: RSA 3072-bit, SHA256withRSA
+Validity: 1 November 2026 to 19 March 2054
+
+This replaces the previous Woozypictures signing key. The old fingerprint is no longer the expected fingerprint for new builds signed with this key. Keep this keystore and its password in a secure backup. Do not upload the private keystore to Claude, source control, or public storage. Use this same new key for every future update signed under this app identity.
+
+SHA-256 certificate fingerprint:
+B4:6B:0E:06:B3:7C:03:68:CC:ED:56:15:F4:61:F0:50:8C:96:C0:F3:92:DC:A3:03:C6:0C:B6:EE:0C:A6:AB:E8
